@@ -13,6 +13,7 @@ class MessageHandler {
           message.id,
           senderInfo
         );
+        await this.sendWelcomeMenu(cleanPhoneNumber(message.from));
       } else {
         const response = `Echo: ${message.text.body}`;
         await whatsappService.sendMessage(
@@ -42,6 +43,25 @@ class MessageHandler {
     const firstName = this.getFirstName(fullName);
     const welcomeMessage = `Hola ${firstName}, Bienvenido a Resiliencia, Tu panaderia en línea. ¿En qué puedo ayudarte hoy?`;
     await whatsappService.sendMessage(to, welcomeMessage, messageId);
+  }
+
+  async sendWelcomeMenu(to) {
+    const menuMessage = "Elige una Opción";
+    const buttons = [
+      {
+        type: "reply",
+        reply: { id: "opcion_1", title: "Comprar Pan" },
+      },
+      {
+        type: "reply",
+        reply: { id: "opcion_2", title: "Consultar" },
+      },
+      {
+        type : "reply", reply: { id: "opcion_3", title: "Ubicación" },
+      }
+    ];
+
+    await whatsappService.sendInteractiveButtons(to, menuMessage, buttons);
   }
 }
 export default new MessageHandler();
