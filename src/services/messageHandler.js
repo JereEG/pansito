@@ -1,3 +1,4 @@
+import { response } from "express";
 import whatsappService from "./whatsappService.js";
 const cleanPhoneNumber = (number) => {
   return number.length >= 3 ? number.slice(0, 2) + number.slice(3) : number;
@@ -23,6 +24,10 @@ class MessageHandler {
         );
       }
       await whatsappService.markAsRead(message.id);
+    } else if(message?.type === 'interactive') {
+        const option = message?.interactive?.button_reply?.title.toLowerCase().trim();
+        await this.handleMenuOption(cleanPhoneNumber(message.from), option);
+        await whatsappService.markAsRead(message.id);
     }
   }
   isGreeting(message) {
@@ -62,6 +67,28 @@ class MessageHandler {
     ];
 
     await whatsappService.sendInteractiveButtons(to, menuMessage, buttons);
+  }
+  async handleMenuOption(to, option) {
+    let response = "";
+    switch (option) {
+      case "comprar pan":
+        // await this.sendBuyBreadMenu(to);
+        response = "Comprar Pan";
+        break;
+      case "consultar":
+        // await this.sendConsultMenu(to);
+        response = "Realiza tu consulta";
+        break;
+      case "ubicación":
+        // await this.sendLocation(to);
+        response = "google maps ubicación";
+        break;
+      default:
+        // await this.sendDefaultMessage(to);
+        response = "Lo siento, no entendi tu selección, Por favor, elige una de las opciones del menú";
+        break;
+    }
+    await whatsappService.sendMessage(to, response);
   }
 }
 export default new MessageHandler();
