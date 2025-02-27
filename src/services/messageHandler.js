@@ -15,6 +15,8 @@ class MessageHandler {
           senderInfo
         );
         await this.sendWelcomeMenu(cleanPhoneNumber(message.from));
+      } else if (incomingMessage === "media") {
+        await this.sendMedia(cleanPhoneNumber(message.from));
       } else {
         const response = `Echo: ${message.text.body}`;
         await whatsappService.sendMessage(
@@ -24,11 +26,32 @@ class MessageHandler {
         );
       }
       await whatsappService.markAsRead(message.id);
-    } else if(message?.type === 'interactive') {
-        const option = message?.interactive?.button_reply?.title.toLowerCase().trim();
-        await this.handleMenuOption(cleanPhoneNumber(message.from), option);
-        await whatsappService.markAsRead(message.id);
+    } else if (message?.type === "interactive") {
+      const option = message?.interactive?.button_reply?.title
+        .toLowerCase()
+        .trim();
+      await this.handleMenuOption(cleanPhoneNumber(message.from), option);
+      await whatsappService.markAsRead(message.id);
     }
+  }
+  async sendMedia(to) {
+    const mediaUrl = 'https://s3.amazonaws.com/gndx.dev/medpet-audio.aac';
+    const caption = 'Bienvenida';
+    const type = 'audio';
+
+    // const mediaUrl = 'https://s3.amazonaws.com/gndx.dev/medpet-imagen.png';
+    // const caption = '¡Esto es una Imagen!';
+    // const type = 'image';
+
+    // const mediaUrl = 'https://s3.amazonaws.com/gndx.dev/medpet-video.mp4';
+    // const caption = '¡Esto es una video!';
+    // const type = 'video';
+
+    // const mediaUrl = "https://s3.amazonaws.com/gndx.dev/medpet-file.pdf";
+    // const caption = "¡Esto es un PDF!";
+    // const type = "document";
+
+    await whatsappService.sendMediaMessage(to, type, mediaUrl, caption);
   }
   isGreeting(message) {
     const greetings = ["hola", "hello", "hi", "buenas tardes"];
@@ -40,7 +63,7 @@ class MessageHandler {
   }
 
   getFirstName = (fullName) => {
-    const nameParts = fullName.split(' ');
+    const nameParts = fullName.split(" ");
     return nameParts[0];
   };
   async sendWelcomeMessage(to, messageId, senderInfo) {
@@ -62,8 +85,9 @@ class MessageHandler {
         reply: { id: "opcion_2", title: "Consultar" },
       },
       {
-        type : "reply", reply: { id: "opcion_3", title: "Ubicación" },
-      }
+        type: "reply",
+        reply: { id: "opcion_3", title: "Ubicación" },
+      },
     ];
 
     await whatsappService.sendInteractiveButtons(to, menuMessage, buttons);
@@ -85,7 +109,8 @@ class MessageHandler {
         break;
       default:
         // await this.sendDefaultMessage(to);
-        response = "Lo siento, no entendi tu selección, Por favor, elige una de las opciones del menú";
+        response =
+          "Lo siento, no entendi tu selección, Por favor, elige una de las opciones del menú";
         break;
     }
     await whatsappService.sendMessage(to, response);
