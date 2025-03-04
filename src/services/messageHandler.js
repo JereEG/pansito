@@ -5,6 +5,8 @@ const cleanPhoneNumber = (number) => {
 };
 class MessageHandler {
   async handleIncomingMessage(message, senderInfo) {
+    const mediaKeywords = ["media", "imagen", "video", "audio", "pdf"];
+
     if (message?.type === "text") {
       const incomingMessage = message.text.body.toLowerCase().trim();
 
@@ -15,8 +17,9 @@ class MessageHandler {
           senderInfo
         );
         await this.sendWelcomeMenu(cleanPhoneNumber(message.from));
-      } else if (incomingMessage === "media") {
-        await this.sendMedia(cleanPhoneNumber(message.from));
+      } else if (mediaKeywords.includes(incomingMessage.toLowerCase().trim())) {
+
+        await this.sendMedia(cleanPhoneNumber(message.from), incomingMessage.toLowerCase().trim());
       } else {
         const response = `Echo: ${message.text.body}`;
         await whatsappService.sendMessage(
@@ -34,22 +37,44 @@ class MessageHandler {
       await whatsappService.markAsRead(message.id);
     }
   }
-  async sendMedia(to) {
-    const mediaUrl = 'https://s3.amazonaws.com/gndx.dev/medpet-audio.aac';
-    const caption = 'Bienvenida';
-    const type = 'audio';
+  async sendMedia(to, incomingMessage) {
+     let mediaUrl = "";
+     let caption = "";
+     let type = "";
+    switch (incomingMessage) {
+        case "imagen":
+            mediaUrl =
+              "https://s3.amazonaws.com/gndx.dev/medpet-imagen.png";
+            caption = "¡Esto es una Imagen!";
+            type = "image";
+            break;
+        case "video":
+            mediaUrl =
+              "https://s3.amazonaws.com/gndx.dev/medpet-video.mp4";
+            caption = "¡Esto es una video!";
+            type = "video";
+            break;
+        case "audio":
+            mediaUrl =
+              "https://s3.amazonaws.com/gndx.dev/medpet-audio.aac";
+            caption = "Bienvenida";
+            type = "audio";
+            break;
+        case "pdf":
+            mediaUrl =
+              "https://s3.amazonaws.com/gndx.dev/medpet-file.pdf";
+            caption = "¡Esto es un PDF!";
+            type = "document";
+            break;
+        default:
+    }
 
-    // const mediaUrl = 'https://s3.amazonaws.com/gndx.dev/medpet-imagen.png';
-    // const caption = '¡Esto es una Imagen!';
-    // const type = 'image';
 
-    // const mediaUrl = 'https://s3.amazonaws.com/gndx.dev/medpet-video.mp4';
-    // const caption = '¡Esto es una video!';
-    // const type = 'video';
+    
 
-    // const mediaUrl = "https://s3.amazonaws.com/gndx.dev/medpet-file.pdf";
-    // const caption = "¡Esto es un PDF!";
-    // const type = "document";
+    
+
+    
 
     await whatsappService.sendMediaMessage(to, type, mediaUrl, caption);
   }
@@ -78,7 +103,7 @@ class MessageHandler {
     const buttons = [
       {
         type: "reply",
-        reply: { id: "opcion_1", title: "Comprar Pan" },
+        reply: { id: "opcion_1", title: "Agendar" },
       },
       {
         type: "reply",
@@ -95,9 +120,10 @@ class MessageHandler {
   async handleMenuOption(to, option) {
     let response = "";
     switch (option) {
-      case "comprar pan":
+      case "agendar":
         // await this.sendBuyBreadMenu(to);
-        response = "Comprar Pan";
+        this.appointmentState[to] = { step: "name" };
+        response = "Por favor ingresa tu nombre:";
         break;
       case "consultar":
         // await this.sendConsultMenu(to);
