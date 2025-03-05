@@ -54,9 +54,10 @@ class MessageHandler {
       }
       await whatsappService.markAsRead(message.id);
     } else if (message?.type === "interactive") {
-      const option = message?.interactive?.button_reply?.title
-        .toLowerCase()
-        .trim();
+      // const option = message?.interactive?.button_reply?.title
+      //   .toLowerCase()
+      //   .trim();
+        const option = message?.interactive?.button_reply?.id;
       await this.handleMenuOption(cleanPhoneNumber(message.from), option);
       await whatsappService.markAsRead(message.id);
     }
@@ -116,15 +117,15 @@ class MessageHandler {
     const buttons = [
       {
         type: "reply",
-        reply: { id: "opcion_1", title: "Agendar" },
+        reply: { id: "opcion_agendar", title: "Agendar" },
       },
       {
         type: "reply",
-        reply: { id: "opcion_2", title: "Consultar" },
+        reply: { id: "opcion_consultar", title: "Consultar" },
       },
       {
         type: "reply",
-        reply: { id: "opcion_3", title: "Ubicación" },
+        reply: { id: "opcion_ubicacion", title: "Ubicación" },
       },
     ];
 
@@ -158,16 +159,16 @@ class MessageHandler {
   async handleMenuOption(to, option) {
     let response = "";
     switch (option) {
-      case "agendar":
+      case "opcion_agendar":
         // await this.sendBuyBreadMenu(to);
         this.appointmentState[to] = { step: "name" };
         response = "Por favor ingresa tu nombre:";
         break;
-      case "consultar":
+      case "opcion_consultar":
         this.assistandState[to] = { step: "question" };
         response = "Realiza tu consulta";
         break;
-      case "ubicación":
+      case "opcion_ubicacion":
         // await this.sendLocation(to);
         response = "google maps ubicación";
         break;
@@ -221,15 +222,15 @@ class MessageHandler {
     const buttons = [
       {
         type: "reply",
-        reply: { id: "option_4", title: "Sí, Gracias" },
+        reply: { id: "opcion_si_gracias", title: "Sí, Gracias" },
       },
       {
         type: "reply",
-        reply: { id: "option_5", title: "Hacer otra pregunta" },
+        reply: { id: "opcion_hacer_otra_pregunta", title: "Hacer otra pregunta" },
       },
       {
         type: "reply",
-        reply: { id: "option_6", title: "Emergencia" },
+        reply: { id: "opcion_emergencia", title: "Emergencia" },
       },
     ];
 
