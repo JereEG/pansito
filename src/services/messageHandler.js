@@ -1,12 +1,15 @@
 import { response } from "express";
 import whatsappService from "./whatsappService.js";
 import appendToSheet from "./googleSheetsService.js";
+import openAiService from "./openAiService.js";
+
 const cleanPhoneNumber = (number) => {
   return number.length >= 3 ? number.slice(0, 2) + number.slice(3) : number;
 };
 class MessageHandler {
   constructor() {
     this.appointmentState = {};
+    this.assistandState = {};
   }
 
   async handleIncomingMessage(message, senderInfo) {
@@ -29,6 +32,11 @@ class MessageHandler {
         );
       } else if (this.appointmentState[cleanPhoneNumber(message.from)]) {
         await this.handleAppointmentFlow(
+          cleanPhoneNumber(message.from),
+          incomingMessage
+        );
+      } else if (this.assistandState[cleanPhoneNumber(message.from)]) {
+        await this.handleAsistandFlow(
           cleanPhoneNumber(message.from),
           incomingMessage
         );
@@ -156,7 +164,7 @@ class MessageHandler {
         response = "Por favor ingresa tu nombre:";
         break;
       case "consultar":
-        // await this.sendConsultMenu(to);
+        this.assistandState[to] = { step: "question" };
         response = "Realiza tu consulta";
         break;
       case "ubicación":
@@ -199,6 +207,34 @@ class MessageHandler {
         break;
     }
     await whatsappService.sendMessage(to, response);
+  }
+  async handleAsistandFlow(to, message) {
+    const state = this.assistandState[to];
+    let response;
+
+    const menuMessage = "¿La respuesta fue de tu ayuda?";
+    const buttons = [
+      {
+        type: "reply",
+        reply: { id: "option_4", title: "Sí, Gracias" },
+      },
+      {
+        type: "reply",
+        reply: { id: "option_5", title: "Hacer otra pregunta" },
+      },
+      {
+        type: "reply",
+        reply: { id: "option_6", title: "Emergencia" },
+      },
+    ];
+
+    if(state.step === "question"){
+      response = await openAiService(message);
+
+    }
+    delete this.assistandState[to];
+    await whatsappService.sendMessage(to, response);
+    await whatsappService.sendInteractiveButtons(to, menuMessage, buttons); 
   }
 }
 export default new MessageHandler();
