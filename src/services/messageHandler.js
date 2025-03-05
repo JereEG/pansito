@@ -171,6 +171,11 @@ class MessageHandler {
         // await this.sendLocation(to);
         response = "google maps ubicación";
         break;
+      case "emergencia":
+        response =
+          "Si esto es una emergencia, te invitamos a llamar a nuestra linea de atención";
+        await this.sendContact(to);
+        break;
       default:
         // await this.sendDefaultMessage(to);
         response =
@@ -228,13 +233,61 @@ class MessageHandler {
       },
     ];
 
-    if(state.step === "question"){
+    if (state.step === "question") {
       response = await openAiService(message);
-
     }
     delete this.assistandState[to];
     await whatsappService.sendMessage(to, response);
-    await whatsappService.sendInteractiveButtons(to, menuMessage, buttons); 
+    await whatsappService.sendInteractiveButtons(to, menuMessage, buttons);
+  }
+  async sendContact(to) {
+    const contact = {
+      addresses: [
+        {
+          street: "123 Calle de las Mascotas",
+          city: "Ciudad",
+          state: "Estado",
+          zip: "12345",
+          country: "País",
+          country_code: "PA",
+          type: "WORK",
+        },
+      ],
+      emails: [
+        {
+          email: "contacto@medpet.com",
+          type: "WORK",
+        },
+      ],
+      name: {
+        formatted_name: "MedPet Contacto",
+        first_name: "MedPet",
+        last_name: "Contacto",
+        middle_name: "",
+        suffix: "",
+        prefix: "",
+      },
+      org: {
+        company: "MedPet",
+        department: "Atención al Cliente",
+        title: "Representante",
+      },
+      phones: [
+        {
+          phone: "+1234567890",
+          wa_id: "1234567890",
+          type: "WORK",
+        },
+      ],
+      urls: [
+        {
+          url: "https://www.medpet.com",
+          type: "WORK",
+        },
+      ],
+    };
+
+    await whatsappService.sendContactMessage(to, contact);
   }
 }
 export default new MessageHandler();
