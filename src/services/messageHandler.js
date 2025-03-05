@@ -1,5 +1,6 @@
 import { response } from "express";
 import whatsappService from "./whatsappService.js";
+import appendToSheet from "./googleSheetsService.js";
 const cleanPhoneNumber = (number) => {
   return number.length >= 3 ? number.slice(0, 2) + number.slice(3) : number;
 };
@@ -134,7 +135,7 @@ class MessageHandler {
       appointment.reason,
       new Date().toISOString(),
     ];
-    console.log(userData);
+    appendToSheet(userData);
     return `Gracias por agendar tu cita.
     Resumen de tu cita:
     
@@ -194,7 +195,7 @@ class MessageHandler {
         break;
       case "reason":
         state.reason = message;
-        response = "Gracias por agendar tu cita.";
+        response = this.completeAppointment(to);
         break;
     }
     await whatsappService.sendMessage(to, response);
