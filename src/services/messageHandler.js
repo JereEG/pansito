@@ -169,7 +169,7 @@ class MessageHandler {
         response = "Realiza tu consulta";
         break;
       case "opcion_ubicacion":
-        // await this.sendLocation(to);
+        await this.sendLocation(to);
         response = "google maps ubicación";
         break;
       case "emergencia":
@@ -289,6 +289,14 @@ class MessageHandler {
     };
 
     await whatsappService.sendContactMessage(to, contact);
+  }
+  async sendLocation(to) {
+    const latitud = 6.2071694;
+    const longitud = -75.574607;
+    const name = "Platzi Medellín";
+    const address = "Cra. 43A #5A -113, El Poblado, Medellín, Antioquia";
+
+    await whatsappService.sendLocationMessage(to, latitud, longitud, name, address);
   }
 }
 export default new MessageHandler();

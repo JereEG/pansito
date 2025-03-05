@@ -128,5 +128,30 @@ class WhatsAppService {
       console.errror(error);
     }
   }
+  async sendLocationMessage(to, latitud, longitud, name, address) {
+    try {
+    
+      await axios({
+        method: "POST",
+        url: `https://graph.facebook.com/${config.API_VERSION}/${config.BUSINESS_PHONE}/messages`,
+        headers: {
+          Authorization: `Bearer ${config.API_TOKEN}`,
+        },
+        data: {
+          messaging_product: "whatsapp",
+          to,
+          type: 'location',
+          location: {
+            latitude: latitud,
+            longitude: longitud,
+            name: name,
+            address: address,
+          },
+      },
+      });
+    } catch (error) {
+      console.error("Error sending Loaction Message:", error);
+    }
+  }
 }
 export default new WhatsAppService();
