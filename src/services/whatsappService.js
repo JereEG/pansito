@@ -1,56 +1,28 @@
-import axios from 'axios';
-import config from '../config/env.js';
-
+import sendToWhatsapp from "./httpRequest/sendToWhatsapp.js";
 class WhatsAppService {
   async sendMessage(to, body, messageId) {
-    try {
-      await axios({
-        method: "POST",
-        url: `https://graph.facebook.com/${config.API_VERSION}/${config.BUSINESS_PHONE}/messages`,
-        headers: {
-          Authorization: `Bearer ${config.API_TOKEN}`,
-        },
-        data: {
-          messaging_product: "whatsapp",
-          to,
-          text: { body },
-          //   context: { //replica sobre el mensaje por su id
-          //     message_id: messageId,
-          //   },
-        },
-      });
-    } catch (error) {
-      console.error("Error sending message:", error);
+   const data = {
+      messaging_product: "whatsapp",
+      to,
+      text: {
+        body,
+      },
     }
+
+    await sendToWhatsapp(data);
   }
 
   async markAsRead(messageId) {
-    try {
-      await axios({
-        method: "POST",
-        url: `https://graph.facebook.com/${config.API_VERSION}/${config.BUSINESS_PHONE}/messages`,
-        headers: {
-          Authorization: `Bearer ${config.API_TOKEN}`,
-        },
-        data: {
-          messaging_product: "whatsapp",
-          status: "read",
-          message_id: messageId,
-        },
-      });
-    } catch (error) {
-      console.error("Error marking message as read:", error);
-    }
+    const data = {
+      messaging_product: "whatsapp",
+      status: "read",
+      message_id: messageId,
+    };
+
+    await sendToWhatsapp(data);
   }
   async sendInteractiveButtons(to, BodyText, buttons) {
-    try {
-      await axios({
-        method: "POST",
-        url: `https://graph.facebook.com/${config.API_VERSION}/${config.BUSINESS_PHONE}/messages`,
-        headers: {
-          Authorization: `Bearer ${config.API_TOKEN}`,
-        },
-        data: {
+   const data ={
           messaging_product: "whatsapp",
           to,
           type: "interactive",
@@ -61,83 +33,51 @@ class WhatsAppService {
               buttons: buttons,
             },
           },
-        },
-      });
-    } catch (error) {
-      console.error("Error sending interactive buttons:", error);
-    }
+        };
+    await sendToWhatsapp(data);
   }
   async sendMediaMessage(to, type, mediaUrl, caption) {
-    try {
-      const mediaObject = {};
+    const mediaObject = {};
 
-      switch (type) {
-        case "image":
-          mediaObject.image = { link: mediaUrl, caption: caption };
-          break;
-        case "audio":
-          mediaObject.audio = { link: mediaUrl };
-          break;
-        case "video":
-          mediaObject.video = { link: mediaUrl, caption: caption };
-          break;
-        case "document":
-          mediaObject.document = {
-            link: mediaUrl,
-            caption: caption,
-            filename: "medpet.pdf",
-          };
-          break;
-        default:
-          throw new Error("Not Soported Media Type");
-      }
-
-      await axios({
-        method: "POST",
-        url: `https://graph.facebook.com/${config.API_VERSION}/${config.BUSINESS_PHONE}/messages`,
-        headers: {
-          Authorization: `Bearer ${config.API_TOKEN}`,
-        },
-        data: {
+    switch (type) {
+      case "image":
+        mediaObject.image = { link: mediaUrl, caption: caption };
+        break;
+      case "audio":
+        mediaObject.audio = { link: mediaUrl };
+        break;
+      case "video":
+        mediaObject.video = { link: mediaUrl, caption: caption };
+        break;
+      case "document":
+        mediaObject.document = {
+          link: mediaUrl,
+          caption: caption,
+          filename: "medpet.pdf",
+        };
+        break;
+      default:
+        throw new Error("Not Soported Media Type");
+    }
+    const data = {
           messaging_product: "whatsapp",
           to,
           type: type,
           ...mediaObject,
-        },
-      });
-    } catch (error) {
-      console.error("Error sending Media", error);
-    }
+        };
+    await sendToWhatsapp(data);
   }
   async sendContactMessage(to, contact) {
-    try {
-      await axios({
-        method: "POST",
-        url: `https://graph.facebook.com/${config.API_VERSION}/${config.BUSINESS_PHONE}/messages`,
-        headers: {
-          Authorization: `Bearer ${config.API_TOKEN}`,
-        },
-        data: {
+    const data= {
           messaging_product: "whatsapp",
           to,
           type: "contacts",
           contacts: [contact],
-        },
-      });
-    } catch (error) {
-      console.errror(error);
-    }
+        };
+    await sendToWhatsapp(data);
   }
   async sendLocationMessage(to, latitud, longitud, name, address) {
-    try {
-    
-      await axios({
-        method: "POST",
-        url: `https://graph.facebook.com/${config.API_VERSION}/${config.BUSINESS_PHONE}/messages`,
-        headers: {
-          Authorization: `Bearer ${config.API_TOKEN}`,
-        },
-        data: {
+    const data= {
           messaging_product: "whatsapp",
           to,
           type: 'location',
@@ -147,11 +87,8 @@ class WhatsAppService {
             name: name,
             address: address,
           },
-      },
-      });
-    } catch (error) {
-      console.error("Error sending Loaction Message:", error);
-    }
+      };
+   await sendToWhatsapp(data);
   }
 }
 export default new WhatsAppService();
