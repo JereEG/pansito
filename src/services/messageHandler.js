@@ -1,6 +1,7 @@
 import { response } from "express";
 import whatsappService from "./whatsappService.js";
 import appendToSheet from "./googleSheetsService.js";
+import appendToCalendar from "./googleCalendarService.js";
 import openAiService from "./openAiService.js";
 
 const cleanPhoneNumber = (number) => {
@@ -19,34 +20,30 @@ class MessageHandler {
       const incomingMessage = message.text.body.toLowerCase().trim();
 
       if (this.isGreeting(incomingMessage)) {
+        //mensaje de bienvenida
         await this.sendWelcomeMessage(
           cleanPhoneNumber(message.from),
           message.id,
           senderInfo
         );
+        //menu de opciones
         await this.sendWelcomeMenu(cleanPhoneNumber(message.from));
       } else if (mediaKeywords.includes(incomingMessage.toLowerCase().trim())) {
         await this.sendMedia(
           cleanPhoneNumber(message.from),
           incomingMessage.toLowerCase().trim()
         );
-      } else if (this.appointmentState[cleanPhoneNumber(message.from)]) {
+      } else if (this.appointmentState[cleanPhoneNumber(message.from)]) { //camino de agendar cita
         await this.handleAppointmentFlow(
           cleanPhoneNumber(message.from),
           incomingMessage
         );
-      } else if (this.assistandState[cleanPhoneNumber(message.from)]) {
+      } else if (this.assistandState[cleanPhoneNumber(message.from)]) { //camino de consulta
         await this.handleAsistandFlow(
           cleanPhoneNumber(message.from),
           incomingMessage
         );
       } else {
-        // const response = `Echo: ${message.text.body}`;
-        // await whatsappService.sendMessage(
-        //   cleanPhoneNumber(message.from),
-        //   response,
-        //   message.id
-        // );
         await this.handleMenuOption(
           cleanPhoneNumber(message.from),
           incomingMessage
@@ -54,10 +51,7 @@ class MessageHandler {
       }
       await whatsappService.markAsRead(message.id);
     } else if (message?.type === "interactive") {
-      // const option = message?.interactive?.button_reply?.title
-      //   .toLowerCase()
-      //   .trim();
-        const option = message?.interactive?.button_reply?.id;
+      const option = message?.interactive?.button_reply?.id;
       await this.handleMenuOption(cleanPhoneNumber(message.from), option);
       await whatsappService.markAsRead(message.id);
     }
@@ -206,14 +200,20 @@ class MessageHandler {
         state.petType = message;
         state.step = "reason";
         response = "¿Cuál es el motivo de la Consulta?";
+        console.log("1Motivo de consulta recibido:", state.step);
         break;
       case "reason":
-        state.reason = message;
+        console.log("2Motivo de consulta recibido:", state.step);
+        state.step = message;
+        console.log("3Motivo de consulta recibido:", state.reason);
+        console.log("4Motivo de consulta recibido:", state.step);
+
         response = this.completeAppointment(to);
         break;
     }
     await whatsappService.sendMessage(to, response);
   }
+
   async handleAsistandFlow(to, message) {
     const state = this.assistandState[to];
     let response;
@@ -226,7 +226,10 @@ class MessageHandler {
       },
       {
         type: "reply",
-        reply: { id: "opcion_hacer_otra_pregunta", title: "Hacer otra pregunta" },
+        reply: {
+          id: "opcion_hacer_otra_pregunta",
+          title: "Hacer otra pregunta",
+        },
       },
       {
         type: "reply",
@@ -296,7 +299,13 @@ class MessageHandler {
     const name = "Platzi Medellín";
     const address = "Cra. 43A #5A -113, El Poblado, Medellín, Antioquia";
 
-    await whatsappService.sendLocationMessage(to, latitud, longitud, name, address);
+    await whatsappService.sendLocationMessage(
+      to,
+      latitud,
+      longitud,
+      name,
+      address
+    );
   }
 }
 export default new MessageHandler();
