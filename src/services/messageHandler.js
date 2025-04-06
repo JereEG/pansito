@@ -30,10 +30,10 @@ class MessageHandler {
   async handleIncomingMessage(message, senderInfo) {
     const mediaKeywords = ["media", "imagen", "video", "audio", "pdf"];
 
-    if (message?.type === "text") {
+    if (message?.type === "text") { //Se recibio un mensaje de texto
       const incomingMessage = message.text.body.toLowerCase().trim();
 
-      if (this.isGreeting(incomingMessage)) {
+      if (this.isGreeting(incomingMessage)) { //En el mensaje se recibio un saludo
         //mensaje de bienvenida
         await this.sendWelcomeMessage(
           cleanPhoneNumber(message.from),
@@ -42,13 +42,12 @@ class MessageHandler {
         );
         //menu de opciones
         await this.sendWelcomeMenu(cleanPhoneNumber(message.from));
-      } else if (mediaKeywords.includes(incomingMessage.toLowerCase().trim())) {
+      } else if (mediaKeywords.includes(incomingMessage.toLowerCase().trim())) { //prueba de mensaje de tipo media
         await this.sendMedia(
           cleanPhoneNumber(message.from),
           incomingMessage.toLowerCase().trim()
         );
-      } else if (this.horarioAgendado[cleanPhoneNumber(message.from)]) {
-        //camino de agendar cita
+      } else if (this.horarioAgendado[cleanPhoneNumber(message.from)]) { //camino de agendar cit
         // await this.handleAppointmentFlow(
         //   cleanPhoneNumber(message.from),
         //   incomingMessage
@@ -63,14 +62,14 @@ class MessageHandler {
           cleanPhoneNumber(message.from),
           incomingMessage
         );
-      } else {
+      } else { //camino de opciones
         await this.handleMenuOption(
           cleanPhoneNumber(message.from),
           incomingMessage
         );
       }
       await whatsappService.markAsRead(message.id);
-    } else if (message?.type === "interactive") {
+    } else if (message?.type === "interactive") { // el mensaje no es de tipo texto
       const option = message?.interactive?.button_reply?.id;
       await this.handleMenuOption(cleanPhoneNumber(message.from), option);
       await whatsappService.markAsRead(message.id);
@@ -180,13 +179,14 @@ class MessageHandler {
   //   }
   // }
 
+
   async handleMenuOption(to, option) {
     let response = "";
     switch (option) {
       case "opcion_agendar":
         // await this.sendBuyBreadMenu(to);
-        this.appointmentState[to] = { step: "name" };
-        response = "Por favor ingresa tu nombre:";
+        this.horarioAgendado[to] = { step: "title" };
+        response = "¿Cuándo comienza la clase? (ej: lunes 14:00)";
         break;
       case "opcion_consultar":
         this.assistandState[to] = { step: "question" };
@@ -303,16 +303,9 @@ class MessageHandler {
    */
   async nuevoHorario(to, message) {
     // Utilizamos this.horarioAgendado para recolectar los datos
-    const state = this.horarioAgendado[to] || { step: "title" };
+    const state = this.horarioAgendado[to] || { step: "startTime" };
     let response;
-
     switch (state.step) {
-      case "title":
-        state.title = message;
-        state.step = "startTime";
-        response = "¿Cuándo comienza la clase? (ej: lunes 14:00)";
-        break;
-
       case "startTime":
         // Se espera el formato "díaHora" (ej: "lunes 14:00")
         const [diaSemana, horaInicio] = message.toLowerCase().split(" ");
