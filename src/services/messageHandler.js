@@ -185,7 +185,7 @@ class MessageHandler {
     switch (option) {
       case "opcion_agendar":
         // await this.sendBuyBreadMenu(to);
-        this.horarioAgendado[to] = { step: "title" };
+        this.horarioAgendado[to] = { step: "startTime" };
         response = "¿Cuándo comienza la clase? (ej: lunes 14:00)";
         break;
       case "opcion_consultar":
@@ -264,8 +264,8 @@ class MessageHandler {
    */
   async agendarHorario(to) {
     // Obtenemos y limpiamos el estado final
-    const state = this.appointmentState[to];
-    delete this.appointmentState[to];
+    const state = this.horarioAgendado[to];
+    delete this.horarioAgendado[to];
 
     const event = {
       summary: state.title,
@@ -346,9 +346,9 @@ class MessageHandler {
         state.startTime = startDate.toISOString();
         state.endTime = endDate.toISOString();
 
-        // Transferimos el estado final a appointmentState para usarlo en agendarHorario
-        this.appointmentState = this.appointmentState || {};
-        this.appointmentState[to] = state;
+        // Transferimos el estado final a horarioAgendado para usarlo en agendarHorario
+        this.horarioAgendado = this.horarioAgendado || {};
+        this.horarioAgendado[to] = state;
 
         // Se llama a agendarHorario para registrar el evento
         response = await this.agendarHorario(to);
