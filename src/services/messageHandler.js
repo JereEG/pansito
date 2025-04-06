@@ -346,18 +346,12 @@ class MessageHandler {
         state.startTime = startDate.toISOString();
         state.endTime = endDate.toISOString();
 
-        // Transferimos el estado final a horarioAgendado para usarlo en agendarHorario
-        this.horarioAgendado = this.horarioAgendado || {};
-        this.horarioAgendado[to] = state;
-
         // Se llama a agendarHorario para registrar el evento
         response = await this.agendarHorario(to);
-        // Limpiamos el estado de este flujo
-        delete this.horarioAgendado[to];
+
         break;
     }
-
-    this.horarioAgendado = this.horarioAgendado || {};
+    // Guardamos el estado actualizado
     this.horarioAgendado[to] = state;
     await whatsappService.sendMessage(to, response);
   }
