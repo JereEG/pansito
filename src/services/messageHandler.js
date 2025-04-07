@@ -1,8 +1,14 @@
-import { response } from "express";
-import whatsappService from "./whatsappService.js";
-import appendToSheet from "./googleSheetsService.js";
-import appendToCalendar from "./googleCalendarService.js";
-import openAiService from "./openAiService.js";
+import { google } from 'googleapis';
+
+import { response } from 'express';
+import whatsappService from './whatsappService.js';
+import appendToSheet from './googleSheetsService.js';
+import { 
+  obtenerUrlDeAutenticacion,
+  manejarCallbackDeAutenticacion,
+  agendarEvento as appendToCalendar  // Renamed to match your usage
+} from './googleCalendarService.js';
+import openAiService from './openAiService.js';
 
 const cleanPhoneNumber = (number) => {
   return number.length >= 3 ? number.slice(0, 2) + number.slice(3) : number;
@@ -184,10 +190,17 @@ class MessageHandler {
     let response = "";
     switch (option) {
       case "opcion_agendar":
-        // await this.sendBuyBreadMenu(to);
-        this.horarioAgendado[to] = { step: "startTime" };
-        response = "¿Cuándo comienza la clase? (ej: lunes 14:00)";
-        break;
+        if (!telefonoToGmail.has(to)) {
+          const authLink = `https://localhost:3000/auth?=${to}`;
+          response = `🚨 Para agendar clases, primero autenticá tu cuenta de Google:\n\n${authLink}`;
+          break;
+        }
+
+  // Ya está autenticado
+      this.horarioAgendado[to] = { step: "startTime" };
+      response = "¿Cuándo comienza la clase? (ej: lunes 14:00)";
+      break;
+
       case "opcion_consultar":
         this.assistandState[to] = { step: "question" };
         response = "Realiza tu consulta";
@@ -262,6 +275,7 @@ class MessageHandler {
    * Función que registra definitivamente el evento en Google Calendar.
    * Utiliza el estado almacenado en this.appointmentState[to].
    */
+  
   async agendarHorario(to) {
     // Obtenemos y limpiamos el estado final
     const state = this.horarioAgendado[to];
@@ -301,60 +315,133 @@ class MessageHandler {
    * Función para ir recolectando los datos de la clase a agendar.
    * Una vez ingresados todos los datos, transfiere el estado a agendarHorario.
    */
+  // Dentro de la clase MessageHandler
+
   async nuevoHorario(to, message) {
-    // Utilizamos this.horarioAgendado para recolectar los datos
     const state = this.horarioAgendado[to] || { step: "startTime" };
     let response;
+  
     switch (state.step) {
       case "startTime":
-        // Se espera el formato "díaHora" (ej: "lunes 14:00")
-        const [diaSemana, horaInicio] = message.toLowerCase().split(" ");
-        const [hInicio, mInicio] = horaInicio.split(":").map(Number);
-        state.startDay = diaSemana;
-        state.startHour = hInicio;
-        state.startMinute = mInicio;
+        // Se espera el formato "día hora" (ej: "lunes 14:00")
+        const parsed = parsearFechaHora(message);
+        if (!parsed || !parsed.dia) {
+          response = "Formato incorrecto. Por favor usa: 'día hora' (ej: lunes 14:00)";
+          break;
+        }
+  
+        state.diaSemana = parsed.dia;
+        state.horaInicio = parsed.hora;
+        state.minutoInicio = parsed.minutos || 0;
         state.step = "endTime";
         response = "¿A qué hora termina la clase? (ej: 15:00)";
         break;
-
+  
       case "endTime":
-        // Se espera solo la hora de fin, ej "15:00"
-        const [hFin, mFin] = message.split(":").map(Number);
-        state.endHour = hFin;
-        state.endMinute = mFin;
-        state.step = "reminderMinutes";
-        response = "¿Con cuántos minutos de antelación deseas el recordatorio?";
-        break;
-
-      case "reminderMinutes":
-        state.reminderMinutes = parseInt(message, 10);
-        state.step = "done";
-
-        // Calcular la primera fecha de inicio y fin según el día de la semana ingresado
-        const startDate = getNextDateForDay(
-          state.startDay,
-          state.startHour,
-          state.startMinute
+        // Se espera solo la hora de fin (ej: "15:00" o "15")
+        const [hFin, mFin = 0] = message.split(":").map(Number);
+        
+        if (isNaN(hFin) || hFin < 0 || hFin > 23 || mFin < 0 || mFin > 59) {
+          response = "Hora inválida. Por favor usa formato 24h (ej: 15:00)";
+          break;
+        }
+  
+        // Calcular fechas ISO
+        const startDate = this.getNextDateForDay(
+          state.diaSemana, 
+          state.horaInicio, 
+          state.minutoInicio
         );
-        const endDate = getNextDateForDay(
-          state.startDay,
-          state.endHour,
-          state.endMinute
-        );
-
-        // Actualizamos el estado para que agendarHorario trabaje con los formatos ISO
+        
+        const endDate = new Date(startDate);
+        endDate.setHours(hFin, mFin);
+  
+        // Validar que la hora final sea después de la inicial
+        if (endDate <= startDate) {
+          response = "La hora de fin debe ser posterior a la de inicio";
+          break;
+        }
+  
+        // Preparar datos para el calendario
         state.startTime = startDate.toISOString();
         state.endTime = endDate.toISOString();
-
-        // Se llama a agendarHorario para registrar el evento
-        response = await this.agendarHorario(to);
-
+        state.step = "title";
+        response = "¿Qué nombre tendrá la clase?";
+        break;
+  
+      case "title":
+        state.title = message;
+        response = await this.agendarHorario(to); // Finalizar el flujo
+        delete this.horarioAgendado[to]; // Limpiar estado
         break;
     }
-    // Guardamos el estado actualizado
-    this.horarioAgendado[to] = state;
+  
+    if (state.step !== "done") {
+      this.horarioAgendado[to] = state;
+    }
+    
     await whatsappService.sendMessage(to, response);
   }
+  
+
+
+async agendarHorario(to) {
+  const state = this.horarioAgendado[to];
+  delete this.horarioAgendado[to];
+
+  const event = {
+    summary: state.title,
+    start: {
+      dateTime: state.startTime,
+      timeZone: "America/Argentina/Buenos_Aires",
+    },
+    end: {
+      dateTime: state.endTime,
+      timeZone: "America/Argentina/Buenos_Aires",
+    },
+    recurrence: [`RRULE:FREQ=WEEKLY;UNTIL=20240630T235900Z`],
+    reminders: {
+      useDefault: false,
+      overrides: [{ method: "popup", minutes: state.reminderMinutes }],
+    },
+  };
+
+  try {
+    await appendToCalendar(event);
+    return `✅ Clase agendada con éxito en Google Calendar.\n\n🗓️ Detalles:\n📌 Título: ${state.title}\n🕒 Desde: ${state.startTime}\n🕔 Hasta: ${state.endTime}\n⏰ Recordatorio: ${state.reminderMinutes} minutos antes.`;
+  } catch (err) {
+    console.error("Error al insertar evento:", err);
+    return "❌ Hubo un error al agendar la clase. Por favor, intentá más tarde.";
+  }
+}
+
+async handleMenuOption(to, option) {
+  let response = "";
+  switch (option) {
+    case "opcion_agendar":
+      this.horarioAgendado[to] = { step: "startTime" };
+      response = "¿Cuándo comienza la clase? (ej: lunes 14:00)";
+      break;
+    case "opcion_consultar":
+      this.assistandState[to] = { step: "question" };
+      response = "Realiza tu consulta";
+      break;
+    case "opcion_ubicacion":
+      await this.sendLocation(to);
+      response = "Ubicación enviada.";
+      break;
+    case "emergencia":
+      response = "Si esto es una emergencia, llamá a nuestra línea de atención.";
+      await this.sendContact(to);
+      break;
+    default:
+      response =
+        "Lo siento, no entendí tu selección. Por favor, elegí una opción del menú.";
+      break;
+  }
+  await whatsappService.sendMessage(to, response);
+}
+
   async handleAsistandFlow(to, message) {
     const state = this.assistandState[to];
     let response;
