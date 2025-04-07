@@ -1,55 +1,117 @@
-import path from "path";
-import { google } from "googleapis";
+import { google } from 'googleapis';
 
-const calendar = google.calendar("v3");
 
-// Inicializa la autenticación una sola vez
-const auth = new google.auth.GoogleAuth({
-  keyFile: path.join(process.cwd(), "src/credentials", "credentials.json"),
-  scopes: ["https://www.googleapis.com/auth/calendar"],
-});
+const userTokens = new Map(); // En producción deberías persistirlos
+import config from "../config/env.js";
+console.log(process.env.GOOGLE_CLIENT_ID)
+const oauth2Client = new google.auth.OAuth2(
+  config.GOOGLE_CLIENT_ID,
+  config.CLIENT_SECRET,
+  config.GOOGLE_REDIRECT_URI
+);
+// ===============================
+// Autenticación
+// ===============================
+function obtenerUrlDeAutenticacion() {
+  return oauth2Client.generateAuthUrl({
+    access_type: 'offline',
+    scope: ['https://www.googleapis.com/auth/calendar', 'email', 'profile'],
+    prompt: 'consent'
+  });
+}
 
-/**
- * Agrega un evento al calendario de Google
- * @param {object} authClient - Cliente autenticado
- * @param {string} calendarId - ID del calendario
- * @param {object} eventData - Datos del evento
- */
-async function addEventToCalendar(authClient, calendarId, eventData) {
+async function manejarCallbackDeAutenticacion(code) {
   try {
-    const response = await calendar.events.insert({
-      auth: authClient,
-      calendarId,
-      resource: eventData,
-    });
+    const { tokens } = await oauth2Client.getToken(code);
+    oauth2Client.setCredentials(tokens);
 
-    console.log("Evento agregado con éxito:", response.data);
-    return response.data;
+    const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+    const userInfo = await oauth2.userinfo.get();
+    const gmail = userInfo.data.email;
+
+    userTokens.set(gmail, tokens);
+
+    return {
+      success: true,
+      gmail,
+      mensaje: "Autenticación exitosa"
+    };
+
   } catch (error) {
-    console.error("Error en addEventToCalendar:", error);
-    throw new Error(`Error agregando evento: ${error.message || error}`);
+    return {
+      success: false,
+      error: "Error en la autenticación",
+      detalle: error.message
+    };
   }
 }
 
-/**
- * Función para manejar la autenticación y agregar eventos al calendario
- * @param {object} eventData - Datos del evento (título, fecha, etc.)
- */
-const appendToCalendar = async (eventData) => {
+// ===============================
+// Agendado de eventos
+// ===============================
+async function agendarEvento({ gmail, titulo, fecha, hora, horaFinal }) {
   try {
-    const authClient = await auth.getClient();
-    const calendarId = "primary"; // Cambia esto si necesitas un calendario específico
+    const tokens = userTokens.get(gmail);
+    if (!tokens) {
+      return { success: false, error: "Usuario no autenticado" };
+    }
 
-    const response = await addEventToCalendar(
-      authClient,
-      calendarId,
-      eventData
-    );
-    return "Evento agregado correctamente";
+    oauth2Client.setCredentials(tokens);
+
+    // Refresca automáticamente si el access_token expiró
+    await oauth2Client.getAccessToken();
+    userTokens.set(gmail, oauth2Client.credentials);
+
+    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+    const startDateTime = new Date(`${fecha}T${hora}`);
+    const endDateTime = new Date(`${fecha}T${horaFinal}`);
+    const endRecurrence = new Date(startDateTime);
+    endRecurrence.setMonth(endRecurrence.getMonth() + 4);
+
+    const event = {
+      summary: titulo,
+      start: {
+        dateTime: startDateTime.toISOString(),
+        timeZone: 'America/Argentina/Buenos_Aires',
+      },
+      end: {
+        dateTime: endDateTime.toISOString(),
+        timeZone: 'America/Argentina/Buenos_Aires',
+      },
+      recurrence: [
+        `RRULE:FREQ=WEEKLY;UNTIL=${endRecurrence.toISOString().replace(/[-:]/g, '').split('.')[0]}Z`
+      ],
+    };
+
+    const response = await calendar.events.insert({
+      calendarId: 'primary',
+      resource: event,
+    });
+
+    return { success: true, event: response.data };
+
   } catch (error) {
-    console.error("Error en appendToCalendar:", error);
-    throw new Error(`Error general: ${error.message || error}`);
-  }
-};
+    console.error("Error agendando evento:", error);
 
-export default appendToCalendar;
+    if (error.code === 401) {
+      return {
+        success: false,
+        error: "Token inválido o expirado",
+        authUrl: obtenerUrlDeAutenticacion()
+      };
+    }
+
+    return { success: false, error: "Error interno del servidor" };
+  }
+}
+
+
+// ===============================
+// Export
+// ===============================
+export {
+  obtenerUrlDeAutenticacion,
+  manejarCallbackDeAutenticacion,
+  agendarEvento
+};
