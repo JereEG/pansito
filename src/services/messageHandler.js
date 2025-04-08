@@ -1,7 +1,7 @@
 import { response } from "express";
 import whatsappService from "./whatsappService.js";
 import appendToSheet from "./googleSheetsService.js";
-import appendToCalendar from "./googleCalendarService.js";
+import agregarEventoAlCalendario from "./googleCalendarService.js";
 import openAiService from "./openAiService.js";
 
 const cleanPhoneNumber = (number) => {
@@ -30,10 +30,12 @@ class MessageHandler {
   async handleIncomingMessage(message, senderInfo) {
     const mediaKeywords = ["media", "imagen", "video", "audio", "pdf"];
 
-    if (message?.type === "text") { //Se recibio un mensaje de texto
+    if (message?.type === "text") {
+      //Se recibio un mensaje de texto
       const incomingMessage = message.text.body.toLowerCase().trim();
 
-      if (this.isGreeting(incomingMessage)) { //En el mensaje se recibio un saludo
+      if (this.isGreeting(incomingMessage)) {
+        //En el mensaje se recibio un saludo
         //mensaje de bienvenida
         await this.sendWelcomeMessage(
           cleanPhoneNumber(message.from),
@@ -42,12 +44,14 @@ class MessageHandler {
         );
         //menu de opciones
         await this.sendWelcomeMenu(cleanPhoneNumber(message.from));
-      } else if (mediaKeywords.includes(incomingMessage.toLowerCase().trim())) { //prueba de mensaje de tipo media
+      } else if (mediaKeywords.includes(incomingMessage.toLowerCase().trim())) {
+        //prueba de mensaje de tipo media
         await this.sendMedia(
           cleanPhoneNumber(message.from),
           incomingMessage.toLowerCase().trim()
         );
-      } else if (this.horarioAgendado[cleanPhoneNumber(message.from)]) { //camino de agendar cit
+      } else if (this.horarioAgendado[cleanPhoneNumber(message.from)]) {
+        //camino de agendar cit
         // await this.handleAppointmentFlow(
         //   cleanPhoneNumber(message.from),
         //   incomingMessage
@@ -62,14 +66,16 @@ class MessageHandler {
           cleanPhoneNumber(message.from),
           incomingMessage
         );
-      } else { //camino de opciones
+      } else {
+        //camino de opciones
         await this.handleMenuOption(
           cleanPhoneNumber(message.from),
           incomingMessage
         );
       }
       await whatsappService.markAsRead(message.id);
-    } else if (message?.type === "interactive") { // el mensaje no es de tipo texto
+    } else if (message?.type === "interactive") {
+      // el mensaje no es de tipo texto
       const option = message?.interactive?.button_reply?.id;
       await this.handleMenuOption(cleanPhoneNumber(message.from), option);
       await whatsappService.markAsRead(message.id);
@@ -171,7 +177,7 @@ class MessageHandler {
   //   };
 
   //   try {
-  //     await appendToCalendar(event);
+  //     await agregarEventoAlCalendario(event);
   //     return `✅ Clase agendada con éxito en Google Calendar.\n\n🗓️ Detalles:\n📌 Título: ${state.title}\n🕒 Desde: ${state.startTime}\n🕔 Hasta: ${state.endTime}\n⏰ Recordatorio: ${state.reminderMinutes} minutos antes.`;
   //   } catch (err) {
   //     console.error("Error al insertar evento:", err);
@@ -179,14 +185,13 @@ class MessageHandler {
   //   }
   // }
 
-
   async handleMenuOption(to, option) {
     let response = "";
     switch (option) {
       case "opcion_agendar":
         // await this.sendBuyBreadMenu(to);
-        this.horarioAgendado[to] = { step: "startTime" };
-        response = "¿Cuándo comienza la clase? (ej: lunes 14:00)";
+        this.horarioAgendado[to] = { step: "correo" };
+        response = "¿A que correo desea añadir el evento?";
         break;
       case "opcion_consultar":
         this.assistandState[to] = { step: "question" };
@@ -267,31 +272,15 @@ class MessageHandler {
     const state = this.horarioAgendado[to];
     delete this.horarioAgendado[to];
 
-    const event = {
-      summary: state.title,
-      start: {
-        dateTime: state.startTime,
-        timeZone: "America/Argentina/Buenos_Aires",
-      },
-      end: {
-        dateTime: state.endTime,
-        timeZone: "America/Argentina/Buenos_Aires",
-      },
-      recurrence: [`RRULE:FREQ=WEEKLY;UNTIL=20240630T235900Z`],
-      reminders: {
-        useDefault: false,
-        overrides: [
-          {
-            method: "popup",
-            minutes: state.reminderMinutes,
-          },
-        ],
-      },
-    };
-
     try {
-      await appendToCalendar(event);
-      return `✅ Clase agendada con éxito en Google Calendar.\n\n🗓️ Detalles:\n📌 Título: ${state.title}\n🕒 Desde: ${state.startTime}\n🕔 Hasta: ${state.endTime}\n⏰ Recordatorio: ${state.reminderMinutes} minutos antes.`;
+      await agregarEventoAlCalendario(
+        state.title,
+        state.startTime,
+        state.endTime,
+        state.reminderMinutes,
+        state.correo
+      );
+      return `✅ Clase agendada con éxito en Google Calendar.\n\n🗓️ Detalles:\n📧 Correo: ${state.correo} \n📌 Título: ${state.title}\n🕒 Desde: ${state.startTime}\n🕔 Hasta: ${state.endTime}\n⏰ Recordatorio: ${state.reminderMinutes} minutos antes.`;
     } catch (err) {
       console.error("Error al insertar evento:", err);
       return "❌ Hubo un error al agendar la clase. Por favor, intentá más tarde.";
@@ -306,6 +295,16 @@ class MessageHandler {
     const state = this.horarioAgendado[to] || { step: "startTime" };
     let response;
     switch (state.step) {
+      case "correo":
+        state.correo = message;
+        state.step = "title";
+        response = "¿Cual es titulo del evento?";
+        break;
+      case "title":
+        state.title = message; // Guardamos el título del evento
+        state.step = "startTime";
+        response = "¿Cuándo comienza la clase? (ej: lunes 14:00)";
+        break;
       case "startTime":
         // Se espera el formato "díaHora" (ej: "lunes 14:00")
         const [diaSemana, horaInicio] = message.toLowerCase().split(" ");
@@ -331,12 +330,12 @@ class MessageHandler {
         state.step = "done";
 
         // Calcular la primera fecha de inicio y fin según el día de la semana ingresado
-        const startDate = getNextDateForDay(
+        const startDate = this.getNextDateForDay(
           state.startDay,
           state.startHour,
           state.startMinute
         );
-        const endDate = getNextDateForDay(
+        const endDate = this.getNextDateForDay(
           state.startDay,
           state.endHour,
           state.endMinute
