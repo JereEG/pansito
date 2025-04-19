@@ -9,7 +9,10 @@ import {
   agendarClase as appendToCalendar  // Renamed to match your usage
 } from './apiService.js';
 import openAiService from './openAiService.js';
-import { listarEventosPorUsuario } from './googleCalendarService.js';
+import {
+  listarEventosPorUsuario,
+  eliminarEventosPorTitulo,
+} from "./googleCalendarService.js";
 
 const cleanPhoneNumber = (number) => {
   return number.length >= 3 ? number.slice(0, 2) + number.slice(3) : number;
@@ -75,6 +78,20 @@ function parsearFechaHora(input) {
     hora
   };
 }
+// Función auxiliar para formatear fechas y horas
+function formatDateTime(isoString) {
+  if (!isoString) return "Fecha no disponible";
+  
+  const date = new Date(isoString);
+  return date.toLocaleString('es-AR', { 
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
+}
 
 class MessageHandler {
   constructor() {
@@ -84,7 +101,7 @@ class MessageHandler {
     this.horarioAgendado = {};
     this.eventHandlers = {};
     this.awaitingResponses = {}; // nuevo
-
+     this.deleteEventState = {};
   }
 
   async handleIncomingMessage(message, senderInfo) {
@@ -127,19 +144,24 @@ class MessageHandler {
           cleanPhoneNumber(message.from),
           incomingMessage
         );
-      }else if(this.awaitingResponses[cleanPhoneNumber(message.from)]){
+      } else if (this.deleteEventState[cleanPhoneNumber(message.from)]) {
+        // Nuevo: camino de eliminar eventos
+        await this.handleDeleteEventFlow(
+          cleanPhoneNumber(message.from),
+          incomingMessage
+        );
+      } else if (this.awaitingResponses[cleanPhoneNumber(message.from)]) {
+        const callback = this.awaitingResponses[userPhone];
 
-  const callback = this.awaitingResponses[userPhone];
+        // Limpiamos la espera para que no se dispare dos veces
+        delete this.awaitingResponses[userPhone];
 
-  // Limpiamos la espera para que no se dispare dos veces
-  delete this.awaitingResponses[userPhone];
-
-  // Ejecutamos la función que esperaba esta respuesta
-  await callback(incomingMessage);
-  await whatsappService.markAsRead(message.id);
-  return; // no seguir con el flujo normal
-      }
-       else { //camino de opciones
+        // Ejecutamos la función que esperaba esta respuesta
+        await callback(incomingMessage);
+        await whatsappService.markAsRead(message.id);
+        return; // no seguir con el flujo normal
+      } else {
+        //camino de opciones
         await this.handleMenuOption(
           cleanPhoneNumber(message.from),
           incomingMessage
@@ -220,7 +242,7 @@ class MessageHandler {
       },
       {
         type: "reply",
-        reply: { id: "opcion_ubicacion", title: "Eliminar" },
+        reply: { id: "opcion_eliminar", title: "Eliminar" },
       },
     ];
 
@@ -353,67 +375,7 @@ class MessageHandler {
   on(eventName, callback) {
     this.eventHandlers[eventName] = callback;
   }
-/*async agendarHorario(to) {
-  const state = this.horarioAgendado[to];
-  delete this.horarioAgendado[to];
 
-  const event = {
-    summary: state.title,
-    start: {
-      dateTime: state.startTime,
-      timeZone: "America/Argentina/Buenos_Aires",
-    },
-    end: {
-      dateTime: state.endTime,
-      timeZone: "America/Argentina/Buenos_Aires",
-    },
-    recurrence: [`RRULE:FREQ=WEEKLY;UNTIL=20240630T235900Z`],
-
-  };
-
-  try {
-    const authUrl = await Auth();
-    await whatsappService.sendMessage(to, `🔑 Hacé clic para iniciar sesión con Google: ${authUrl}`);
-    await whatsappService.sendMessage(to, "Cuando termines, escribí *listo* en este chat. Tenés 5 minutos.");
-
-    // 2. Esperar respuesta (polling cada 3 segundos)
-    const startTime = Date.now();
-    const timeout = 5 * 60 * 1000; // 5 minutos
-    
-    while (Date.now() - startTime < timeout) {
-      const lastMsg = await getLastMessageFrom(to);
-      
-      if (lastMsg && lastMsg.body.toLowerCase().trim() === "listo") {
-        // 3. Verificar tokens
-        const userTokens = await getTokensForUser(to);
-        if (!userTokens) {
-          await whatsappService.sendMessage(to, "🔐 No detectamos tu login. Por favor:\n1. Haz clic en el link\n2. Inicia sesión\n3. Escribe *listo*");
-          return;
-        }
-
-        // 4. Agendar evento
-    
-        const response = await appendToCalendar(event);
-        delete this.horarioAgendado[to];
-        
-        await whatsappService.sendMessage(to, 
-          `✅ ¡Clase agendada!\n\n` +
-          `📝 ${response.summary}\n` +
-          `⏰ ${new Date(state.startTime).toLocaleString('es-AR')}\n` +
-          `🔔 ${state.reminderMinutes} mins antes`);
-        
-        return response.summary;
-      }
-      
-      await new Promise(resolve => setTimeout(resolve, 3000)); // Espera 3 segundos
-    }
-    return `✅ Clase agendada con éxito en Google Calendar.\n\n🗓️ Detalles:\n📌 Título: ${state.title}\n🕒 Desde: ${state.startTime}\n🕔 Hasta: ${state.endTime}\n⏰ Recordatorio: ${state.reminderMinutes} minutos antes.`;
-  } catch (err) {
-    console.error("Error al insertar evento:", err);
-    return "❌ Hubo un error al agendar la clase. Por favor, intentá más tarde.";
-  }
-}
-*/
 async handleMenuOption(to, option) {
   let response = "";
   switch (option) {
@@ -423,16 +385,18 @@ async handleMenuOption(to, option) {
       break;
     case "opcion_consultar":
       this.assistandState[to] = { step: "question" };
-      response = "Escribe tu correo para realizar la consulta (ej: fulanito@gmail.com)";
+      response =
+        "Escribe tu correo para realizar la consulta (ej: fulanito@gmail.com)";
       break;
     case "listo":
       break;
-    case "opcion_ubicacion":
-      await this.sendLocation(to);
-      response = "Ubicación enviada.";
+    case "opcion_eliminar":
+      this.deleteEventState[to] = { step: "gmail" };
+      response = "Para eliminar un evento, primero necesito tu correo Gmail:";
       break;
     case "emergencia":
-      response = "Si esto es una emergencia, llamá a nuestra línea de atención.";
+      response =
+        "Si esto es una emergencia, llamá a nuestra línea de atención.";
       await this.sendContact(to);
       break;
     default:
@@ -462,7 +426,6 @@ async handleMenuOption(to, option) {
     }
     delete this.assistandState[to];
     await whatsappService.sendMessage(to, response);
-    await whatsappService.sendInteractiveButtons(to, menuMessage, buttons);
   }
   async sendContact(to) {
     const contact = {
@@ -513,6 +476,7 @@ async handleMenuOption(to, option) {
 
     await whatsappService.sendContactMessage(to, contact);
   }
+
   async sendLocation(to) {
     const latitud = 6.2071694;
     const longitud = -75.574607;
@@ -527,5 +491,85 @@ async handleMenuOption(to, option) {
       address
     );
   }
+  async handleDeleteEventFlow(to, message) {
+  const state = this.deleteEventState[to];
+  let response;
+
+  switch (state.step) {
+    case "gmail":
+      // Guardamos el correo del usuario
+      state.gmail = message.trim();
+      state.step = "title";
+      response = "Ahora, escribe el título exacto del evento que deseas eliminar:";
+      break;
+
+    case "title":
+      // Eliminamos los eventos con el título proporcionado
+      const titulo = message.trim();
+      try {
+        const resultado = await eliminarEventosPorTitulo(state.gmail, titulo);
+        
+        if (resultado.success) {
+          if (resultado.eventosEliminados.length > 0) {
+            const eventosText = resultado.eventosEliminados.map(e => 
+              `• ${e.titulo} (${formatDateTime(e.inicio)})`
+            ).join('\n');
+            
+            response = `✅ Se eliminaron ${resultado.eventosEliminados.length} eventos:\n${eventosText}`;
+          } else {
+            response = resultado.mensaje;
+          }
+          
+          // Si hay errores, los añadimos al mensaje
+          if (resultado.errores && resultado.errores.length > 0) {
+            response += `\n\n⚠️ Hubo ${resultado.errores.length} errores al eliminar algunos eventos.`;
+          }
+        } else {
+          response = `❌ ${resultado.error}`;
+          
+          // Si el token expiró y tenemos una URL de autenticación, podríamos
+          // ofrecer al usuario volver a autenticarse (lógica adicional necesaria)
+          if (resultado.authUrl) {
+            response += "\n\nNecesitas volver a autenticarte para continuar.";
+            // Aquí podríamos implementar un flujo de reautenticación si es necesario
+          }
+        }
+      } catch (error) {
+        console.error("Error en flujo de eliminación:", error);
+        response = "❌ Ocurrió un error al intentar eliminar los eventos. Por favor, inténtalo de nuevo más tarde.";
+      }
+      
+      // Limpiamos el estado cuando terminamos
+      delete this.deleteEventState[to];
+      
+      // Volvemos a mostrar el menú principal después de la eliminación
+      await whatsappService.sendMessage(to, response);
+      
+      const menuMessage = "¿Necesitas algo más?";
+      const buttons = [
+        {
+          type: "reply",
+          reply: { id: "opcion_agendar", title: "Agendar" },
+        },
+        {
+          type: "reply",
+          reply: { id: "opcion_consultar", title: "Consultar" },
+        },
+        {
+          type: "reply",
+          reply: { id: "opcion_ubicacion", title: "Eliminar" },
+        },
+      ];
+      
+      await whatsappService.sendInteractiveButtons(to, menuMessage, buttons);
+      return;
+  }
+
+  await whatsappService.sendMessage(to, response);
+}
+
+
+
+  
 }
 export default new MessageHandler();
