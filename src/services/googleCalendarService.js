@@ -14,9 +14,10 @@ const oauth2Client = new google.auth.OAuth2(
 // ===============================
 function obtenerUrlDeAutenticacion() {
   return oauth2Client.generateAuthUrl({
-    access_type: 'offline',
-    scope: ['https://www.googleapis.com/auth/calendar', 'email', 'profile'],
-    prompt: 'consent'
+    access_type: "offline",
+    scope: ["https://www.googleapis.com/auth/calendar", "email", "profile"],
+    prompt: "consent",
+    redirect_uri: config.GOOGLE_REDIRECT_URI,
   });
 }
 
@@ -49,11 +50,18 @@ async function manejarCallbackDeAutenticacion(code) {
 // ===============================
 // Agendado de eventos
 // ===============================
-async function agendarEvento({ gmail, titulo, fecha, hora, horaFinal }) {
+async function agendarEvento({
+  gmail,
+  titulo,
+  fecha,
+  hora,
+  horaFinal,
+  minutosDeAntelacion = 10,
+}) {
   try {
     const tokens = userTokens.get(gmail);
     if (!tokens) {
-      return { success: false, error: "Usuario no autenticado" };
+      return { success: false, error: "Usuario no autenticado", status: 401 };
     }
 
     oauth2Client.setCredentials(tokens);
@@ -62,7 +70,7 @@ async function agendarEvento({ gmail, titulo, fecha, hora, horaFinal }) {
     await oauth2Client.getAccessToken();
     userTokens.set(gmail, oauth2Client.credentials);
 
-    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+    const calendar = google.calendar({ version: "v3", auth: oauth2Client });
 
     const startDateTime = new Date(`${fecha}T${hora}`);
     const endDateTime = new Date(`${fecha}T${horaFinal}`);
@@ -73,24 +81,29 @@ async function agendarEvento({ gmail, titulo, fecha, hora, horaFinal }) {
       summary: titulo,
       start: {
         dateTime: startDateTime.toISOString(),
-        timeZone: 'America/Argentina/Buenos_Aires',
+        timeZone: "America/Argentina/Buenos_Aires",
       },
       end: {
         dateTime: endDateTime.toISOString(),
-        timeZone: 'America/Argentina/Buenos_Aires',
+        timeZone: "America/Argentina/Buenos_Aires",
       },
       recurrence: [
-        `RRULE:FREQ=WEEKLY;UNTIL=${endRecurrence.toISOString().replace(/[-:]/g, '').split('.')[0]}Z`
+        `RRULE:FREQ=WEEKLY;UNTIL=${
+          endRecurrence.toISOString().replace(/[-:]/g, "").split(".")[0]
+        }Z`,
       ],
+      reminders: {
+        useDefault: false,
+        overrides: [{ method: "popup", minutes: minutosDeAntelacion }],
+      },
     };
 
     const response = await calendar.events.insert({
-      calendarId: 'primary',
+      calendarId: "primary",
       resource: event,
     });
 
     return { success: true, event: response.data };
-
   } catch (error) {
     console.error("Error agendando evento:", error);
 
@@ -98,11 +111,62 @@ async function agendarEvento({ gmail, titulo, fecha, hora, horaFinal }) {
       return {
         success: false,
         error: "Token inválido o expirado",
-        authUrl: obtenerUrlDeAutenticacion()
+        authUrl: obtenerUrlDeAutenticacion(),
       };
     }
 
     return { success: false, error: "Error interno del servidor" };
+  }
+}
+
+async function listarEventosPorUsuario(gmail) {
+  try {
+    const tokens = userTokens.get(gmail);
+    if (!tokens) {
+      return { success: false, error: "Usuario no autenticado" };
+    }
+
+    oauth2Client.setCredentials(tokens);
+
+    // Refresca el token si hace falta
+    await oauth2Client.getAccessToken();
+    userTokens.set(gmail, oauth2Client.credentials);
+
+    const calendar = google.calendar({ version: "v3", auth: oauth2Client });
+
+    const res = await calendar.events.list({
+      calendarId: "primary",
+      timeMin: new Date().toISOString(),
+      maxResults: 10,
+      singleEvents: true,
+      orderBy: "startTime",
+    });
+
+    const eventos = res.data.items;
+
+    if (!eventos || eventos.length === 0) {
+      return {
+        success: true,
+        eventos: [],
+        mensaje: "No se encontraron eventos",
+      };
+    }
+
+    const lista = eventos.map((event) => {
+      const inicio = event.start.dateTime || event.start.date;
+      return `📅 ${inicio} | ${event.summary}`;
+    });
+
+    return {
+      success: true,
+      eventos: lista,
+    };
+  } catch (error) {
+    console.error("Error al listar eventos:", error);
+    return {
+      success: false,
+      error: "Error al obtener los eventos",
+    };
   }
 }
 
@@ -113,5 +177,6 @@ async function agendarEvento({ gmail, titulo, fecha, hora, horaFinal }) {
 export {
   obtenerUrlDeAutenticacion,
   manejarCallbackDeAutenticacion,
-  agendarEvento
+  agendarEvento,
+  listarEventosPorUsuario,
 };

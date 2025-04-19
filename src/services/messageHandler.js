@@ -9,6 +9,7 @@ import {
   agendarClase as appendToCalendar  // Renamed to match your usage
 } from './apiService.js';
 import openAiService from './openAiService.js';
+import { listarEventosPorUsuario } from './googleCalendarService.js';
 
 const cleanPhoneNumber = (number) => {
   return number.length >= 3 ? number.slice(0, 2) + number.slice(3) : number;
@@ -77,6 +78,7 @@ function parsearFechaHora(input) {
 
 class MessageHandler {
   constructor() {
+    //Memoria de trabajo
     this.appointmentState = {};
     this.assistandState = {};
     this.horarioAgendado = {};
@@ -103,12 +105,14 @@ class MessageHandler {
         );
         //menu de opciones
         await this.sendWelcomeMenu(cleanPhoneNumber(message.from));
-      } else if (mediaKeywords.includes(incomingMessage.toLowerCase().trim())) { //prueba de mensaje de tipo media
-        await this.sendMedia(
-          cleanPhoneNumber(message.from),
-          incomingMessage.toLowerCase().trim()
-        );
-      } else if (this.horarioAgendado[cleanPhoneNumber(message.from)]) { //camino de agendar cit
+      } 
+      // else if (mediaKeywords.includes(incomingMessage.toLowerCase().trim())) { //prueba de mensaje de tipo media
+      //   await this.sendMedia(
+      //     cleanPhoneNumber(message.from),
+      //     incomingMessage.toLowerCase().trim()
+      //   );
+      // } 
+      else if (this.horarioAgendado[cleanPhoneNumber(message.from)]) { //camino de agendar cit
         // await this.handleAppointmentFlow(
         //   cleanPhoneNumber(message.from),
         //   incomingMessage
@@ -212,7 +216,7 @@ class MessageHandler {
       },
       {
         type: "reply",
-        reply: { id: "opcion_consultar", title: "Editar" },
+        reply: { id: "opcion_consultar", title: "Consultar" },
       },
       {
         type: "reply",
@@ -223,107 +227,7 @@ class MessageHandler {
     await whatsappService.sendInteractiveButtons(to, menuMessage, buttons);
   }
 
-  // async completeAppointment(to) {
-  //   const state = this.appointmentState[to];
-  //   delete this.appointmentState[to]; // Limpia el estado una vez usado
 
-  //   const event = {
-  //     summary: state.title,
-  //     start: {
-  //       dateTime: `${state.startTime}:00-03:00`,
-  //       timeZone: "America/Argentina/Buenos_Aires",
-  //     },
-  //     end: {
-  //       dateTime: `${state.endTime}:00-03:00`,
-  //       timeZone: "America/Argentina/Buenos_Aires",
-  //     },
-  //     reminders: {
-  //       useDefault: false,
-  //       overrides: [
-  //         {
-  //           method: "popup",
-  //           minutes: state.reminderMinutes,
-  //         },
-  //       ],
-  //     },
-  //   };
-
-  //   try {
-  //     await appendToCalendar(event);
-  //     return `✅ Clase agendada con éxito en Google Calendar.\n\n🗓️ Detalles:\n📌 Título: ${state.title}\n🕒 Desde: ${state.startTime}\n🕔 Hasta: ${state.endTime}\n⏰ Recordatorio: ${state.reminderMinutes} minutos antes.`;
-  //   } catch (err) {
-  //     console.error("Error al insertar evento:", err);
-  //     return "❌ Hubo un error al agendar la clase. Por favor, intentá más tarde.";
-  //   }
-  // }
-
-
-  async handleMenuOption(to, option) {
-    let response = "";
-    switch (option) {
-      case "opcion_agendar":
-        
-  // Ya está autenticado
-      this.horarioAgendado[to] = { step: "startTime" };
-      response = "¿Cuándo comienza la clase? (ej: lunes 14:00)";
-      break;
-
-      case "opcion_consultar":
-        this.assistandState[to] = { step: "question" };
-        response = "Realiza tu consulta";
-        break;
-      case "opcion_ubicacion":
-        await this.sendLocation(to);
-        response = "google maps ubicación";
-        break;
-      case "emergencia":
-        response =
-          "Si esto es una emergencia, te invitamos a llamar a nuestra linea de atención";
-        await this.sendContact(to);
-        break;
-      default:
-        // await this.sendDefaultMessage(to);
-        response =
-          "Lo siento, no entendi tu selección, Por favor, elige una de las opciones del menú";
-        break;
-    }
-    await whatsappService.sendMessage(to, response);
-  }
-
-  // async handleAppointmentFlow(to, message) {
-  //   const state = this.appointmentState[to];
-  //   let response;
-
-  //   switch (state.step) {
-  //     case "name":
-  //       state.name = message;
-  //       state.step = "petName";
-  //       response = "Gracias, Ahora, ¿Cuál es el nombre de tu Mascota?";
-  //       break;
-  //     case "petName":
-  //       state.petName = message;
-  //       state.step = "petType";
-  //       response =
-  //         "¿Qué tipo de mascota es? (por ejemplo: perro, gato, huron, etc.)";
-  //       break;
-  //     case "petType":
-  //       state.petType = message;
-  //       state.step = "reason";
-  //       response = "¿Cuál es el motivo de la Consulta?";
-  //       console.log("1Motivo de consulta recibido:", state.step);
-  //       break;
-  //     case "reason":
-  //       console.log("2Motivo de consulta recibido:", state.step);
-  //       state.step = message;
-  //       console.log("3Motivo de consulta recibido:", state.reason);
-  //       console.log("4Motivo de consulta recibido:", state.step);
-
-  //       response = this.completeAppointment(to);
-  //       break;
-  //   }
-  //   await whatsappService.sendMessage(to, response);
-  // }
-  
   /**
    * Función que registra definitivamente el evento en Google Calendar.
    * Utiliza el estado almacenado en this.appointmentState[to].
@@ -403,7 +307,7 @@ class MessageHandler {
         state.step = "gmail";
         response = "Envie su gmail por favor";
       case "gmail":
-        state.gmail='lezanamauricio86@gmail.com' 
+        state.gmail = "jeremiasgonzalez7464@gmail.com"; 
         state.step = "done";
         // Calcular la primera fecha de inicio y fin según el día de la semana ingresado
         const startDate = this.getNextDateForDay(
@@ -519,7 +423,7 @@ async handleMenuOption(to, option) {
       break;
     case "opcion_consultar":
       this.assistandState[to] = { step: "question" };
-      response = "Realiza tu consulta";
+      response = "Escribe tu correo para realizar la consulta (ej: fulanito@gmail.com)";
       break;
     case "listo":
       break;
@@ -542,28 +446,19 @@ async handleMenuOption(to, option) {
   async handleAsistandFlow(to, message) {
     const state = this.assistandState[to];
     let response;
-
-    const menuMessage = "¿La respuesta fue de tu ayuda?";
-    const buttons = [
-      {
-        type: "reply",
-        reply: { id: "opcion_si_gracias", title: "Sí, Gracias" },
-      },
-      {
-        type: "reply",
-        reply: {
-          id: "opcion_hacer_otra_pregunta",
-          title: "Hacer otra pregunta",
-        },
-      },
-      {
-        type: "reply",
-        reply: { id: "opcion_emergencia", title: "Emergencia" },
-      },
-    ];
-
     if (state.step === "question") {
-      response = await openAiService(message);
+      const respuesta = await listarEventosPorUsuario(message);
+
+      if (respuesta.success) {
+        if (respuesta.eventos.length === 0) {
+          response = "No tenés eventos próximos.";
+        } else {
+          const mensajeEventos = respuesta.eventos.join("\n");
+          response = `Tus próximos eventos:\n${mensajeEventos}`;
+        }
+      } else {
+        response = "Error: " + respuesta.error;
+      }
     }
     delete this.assistandState[to];
     await whatsappService.sendMessage(to, response);

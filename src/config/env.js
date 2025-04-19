@@ -8,8 +8,9 @@ export default {
   BUSINESS_PHONE: process.env.BUSINESS_PHONE,
   API_VERSION: process.env.API_VERSION,
   PORT: process.env.PORT || 3000,
-  CLIENT_ID:process.env.GOOGLE_CLIENT_ID,
-  CLIENT_SECRET:process.env.GOOGLE_CLIENT_SECRET,
+  GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+  CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
+  GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI,
   OPENAI_API_KEY: process.env.OPENAI_API_KEY,
   BASE_URL: process.env.BASE_URL,
 };

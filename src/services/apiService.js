@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:3001'; // Cambia esto por la URL real
+const API_BASE_URL = "https://cm3bxp3b-3000.brs.devtunnels.ms"; // Cambia esto por la URL real
 
 export const login = () => {
     window.open(`${API_BASE_URL}/auth`, '_blank'); // o '_self' si querés en la misma ventana
