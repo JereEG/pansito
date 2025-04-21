@@ -13,4 +13,5 @@ export default {
   GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI,
   OPENAI_API_KEY: process.env.OPENAI_API_KEY,
   BASE_URL: process.env.BASE_URL,
+  API_BASE_URL: process.env.API_BASE_URL
 };

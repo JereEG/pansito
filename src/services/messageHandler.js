@@ -13,6 +13,7 @@ import {
   listarEventosPorUsuario,
   eliminarEventosPorTitulo,
 } from "./googleCalendarService.js";
+import { validate } from 'tough-cookie/dist/validators.js';
 
 const cleanPhoneNumber = (number) => {
   return number.length >= 3 ? number.slice(0, 2) + number.slice(3) : number;
@@ -274,7 +275,7 @@ class MessageHandler {
       return `✅ Clase agendada con éxito en Google Calendar.\n\n🗓️ Detalles:\n📌 Título: ${state.title}\n🕒 Desde: ${state.startTime}\n🕔 Hasta: ${state.endTime}\n⏰ Recordatorio: ${state.reminderMinutes} minutos antes.`;
     } catch (err) {
       console.error("Error al insertar evento:", err);
-      return "❌ Hubo un error al agendar la clase. Por favor, intentá más tarde.";
+      return "❌  un error al agendar la clase. Por favor, intentá más tarde.";
     }
   }
   /**
@@ -304,19 +305,63 @@ class MessageHandler {
     let response;
     switch (state.step) {
       case "startTime":
-        // Se espera el formato "díaHora" (ej: "lunes 14:00")
-        const [diaSemana, horaInicio] = message.toLowerCase().split(" ");
-        const [hInicio, mInicio] = horaInicio.split(":").map(Number);
-        state.startDay = diaSemana;
-        state.startHour = hInicio;
-        state.startMinute = mInicio;
-        state.step = "endTime";
-        response = "¿A qué hora termina la clase? (ej: 15:00)";
-        break;
+    const partes = message.toLowerCase().trim().split(" ");
+
+    if (partes.length !== 2) {
+      response = "Por favor ingresá el día y la hora en el formato correcto (ej: lunes 14:00)";
+      break;
+    }
+
+    const [diaSemana, horaInicio] = partes;
+
+    if (!horaInicio.includes(":")) {
+      response = "La hora debe incluir los dos puntos, por ejemplo: lunes 14:00";
+      break;
+    }
+
+    const [hInicioStr, mInicioStr] = horaInicio.split(":");
+    const hInicio = parseInt(hInicioStr, 10);
+    const mInicio = parseInt(mInicioStr, 10);
+
+    if (
+      isNaN(hInicio) || isNaN(mInicio) ||
+      hInicio < 0 || hInicio > 23 ||
+      mInicio < 0 || mInicio > 59
+    ) {
+      response = "La hora no es válida. Asegurate de usar el formato HH:MM con valores válidos.";
+      break;
+    }
+
+    // Si todo está bien, guardamos y pasamos al siguiente paso
+    state.startDay = diaSemana;
+    state.startHour = hInicio;
+    state.startMinute = mInicio;
+    state.step = "endTime";
+    response = "¿A qué hora termina la clase? (ej: 15:00)";
+    break;
+
 
       case "endTime":
         // Se espera solo la hora de fin, ej "15:00"
-        const [hFin, mFin] = message.split(":").map(Number);
+        const horaFin = message.trim();
+
+        if (!horaFin.includes(":")) {
+          response = "La hora debe incluir los dos puntos, por ejemplo: 17:00";
+          break;
+        }
+      
+        const [hFinStr, mFinStr] = horaFin.split(":");
+        const hFin = parseInt(hFinStr, 10);
+        const mFin = parseInt(mFinStr, 10);
+      
+        if (
+          isNaN(hFin) || isNaN(mFin) ||
+          hFin < 0 || hFin > 23 ||
+          mFin < 0 || mFin > 59
+        ) {
+          response = "La hora no es válida. Asegurate de usar un formato HH:MM correcto.";
+          break;
+        }
         state.endHour = hFin;
         state.endMinute = mFin;
         state.step = "title";
@@ -329,8 +374,19 @@ class MessageHandler {
         state.step = "gmail";
         response = "Envie su gmail por favor";
       case "gmail":
-        state.gmail = "jeremiasgonzalez7464@gmail.com"; 
-        state.step = "done";
+
+        const email = message.trim();
+
+  // Expresión regular básica para validar emails
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  if (!emailRegex.test(email)) {
+    response = "Por favor ingresá un correo electrónico válido (ej: ejemplo@gmail.com)";
+    break;
+  }
+
+  state.gmail = email;
+  state.step = "done";
         // Calcular la primera fecha de inicio y fin según el día de la semana ingresado
         const startDate = this.getNextDateForDay(
           state.startDay,
